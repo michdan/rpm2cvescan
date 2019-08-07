@@ -1,4 +1,8 @@
 rpm2cvescan
+==============
+
+# Original repo
+- [bigHosting/rpm2cvescan](https://github.com/bigHosting/rpm2cvescan)
 
 rpm2cvescan is an RedHat/CentOS 5/6/7/8 rpm cve vulnerability scanner based on
   * RedHat's RPM to CVE mapping:          rpm-to-cve.xml
@@ -23,25 +27,14 @@ How to run the scanner:
   * install package dependencies using:
        # yum -y install perl-XML-Simple
 
-  * download rpmvercmp and compile it
-       el5 # git clone https://github.com/basinilya/rpmvercmp ; cd rpmvercmp; make; cc /usr/lib64/librpm-4.4.so rpmvercm p.o   -o rpmvercmp  ; cp rpmvercmp rpmvercmp.el5 ; cp rpmvercmp.el5 ..; cd ..
-       el6 # git clone https://github.com/basinilya/rpmvercmp ; cd rpmvercmp; make; cp rpmvercmp rpmvercmp.el6 ; cp rpmvercmp.el6 ..; cd ..
-       el7 # git clone https://github.com/basinilya/rpmvercmp ; cd rpmvercmp; cc    -c -o rpmvercmp.o rpmvercmp.c; cc /usr/lib64/librpm.so.3 rpmvercmp.o -o rpmvercmp.el7; cp rpmvercmp.el7 ..; cd ..
-       el8 # git clone https://github.com/basinilya/rpmvercmp ; cd rpmvercmp; cc    -c -o rpmvercmp.o rpmvercmp.c; cc /usr/lib64/librpm.so.8 rpmvercmp.o -o rpmvercmp.el8; cp rpmvercmp.el8 ..; cd ..
+  * build [rpmvercmp](https://github.com/KoffieNu/rpmvercmp)
+       # ./build-libs.sh
 
   * download these files to be sure you have the latest revision:
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL5.xml"
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL6.xml"
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL7.xml"
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL8.xml"
-
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/metrics/rpm-to-cve.xml"
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/metrics/rhsamapcpe.txt"
-       # /usr/bin/wget -N "https://www.redhat.com/security/data/metrics/cve_dates.txt"
+       # ./download.sh
 
   * run the perl program:
        # perl rpm2cvescan.pl
-
 
 
 This tool will only report information about packages used by RedHat. If custom rpms are used,
@@ -52,6 +45,7 @@ e.g. php 5.3 for EL6.
 
 
 
+```
 Output example:
 
 =====  openssh-0:5.3p1-117.el6  =====
@@ -69,6 +63,7 @@ CVE-2016-1908                                               4.9
 =====  sqlite-0:3.6.20-1.el6_7.2  =====
 CVE-2015-3416                                               3.7
 [...]
+```
 
 
 TOTAL_UNIQ_PACKAGES=876, AFFECTED_PACKAGES=67 CVEs=195 HIGHRISK=4
