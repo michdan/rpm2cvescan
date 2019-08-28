@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
+
 # =======================================================================
 # Monkey patch ElementTree
 import xml.etree.ElementTree as ET
@@ -70,6 +72,23 @@ class OrderedXMLTreeBuilder(ET.XMLTreeBuilder):
 
 # =======================================================================
 
+# =======================================================================
+# Recursive criteria processing
+#
+# This is needed as RH CVE xml file is inconsistent with the amount
+# of levels it uses for patch criteria
+
+def recurse_criteria(my_criterion):
+    if my_criterion.tag == namespace+'criteria':
+       for my_criteria in my_criterion:
+	   recurse_criteria(my_criteria)
+    elif my_criterion.tag == namespace+'criterion':
+       if 'is earlier than' in my_criterion.attrib['comment']:
+          comment = my_criterion.attrib['comment'].split()
+	  print "   ", comment[0], "<", comment[-1]
+
+# =======================================================================
+
 xml_tree = ET.parse('./com.redhat.rhsa-RHEL7.xml')
 
 #print xml_tree
@@ -79,7 +98,7 @@ for oval_subset in oval_definitions:
     #print (oval_subset.tag, "->", oval_subset.__dict__)
     print ""
 
-    if oval_subset.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}definitions':
+    if oval_subset.tag == namespace+'definitions':
        for oval_definition in oval_subset:
 
 	   #print oval_definition.tag, "-> ", oval_definition.__dict__
@@ -90,7 +109,7 @@ for oval_subset in oval_definitions:
 	   for patch_data in oval_definition:
 	       #print patch_data.tag, "-> ", patch_data.__dict__
 	       # Get CVE ID
-	       if patch_data.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}metadata':
+	       if patch_data.tag == namespace+'metadata':
 		  for metadata_data in patch_data:
 		      if metadata_data.tag.endswith('reference'):
 			 #print ""
@@ -100,7 +119,7 @@ for oval_subset in oval_definitions:
 			    print "  CVE reference: ", metadata_data.attrib['ref_id']
 
 		  # get CVSS score of the CVE with this patch
-	          if metadata_data.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}advisory':
+	          if metadata_data.tag == namespace+'advisory':
 		     for advisory_data in metadata_data:
 			 # Assumption: CVSS3 score takes president over CVSS2
 		         if 'cvss3' in advisory_data.keys():
@@ -136,24 +155,9 @@ for oval_subset in oval_definitions:
 	       # AT 1st level we alwais have criteria
 	       # at 2nd and later levels it is possible to find a criterion
 	       # with package name and version we need to store
-	       if patch_data.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}criteria':
+	       if patch_data.tag == namespace+'criteria':
 		  for criteria2 in patch_data:
-		      if criteria2.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}criteria':
-			 for criteria3 in criteria2:
-			     if criteria3.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}criteria':
-			        for criterion in criteria3:
-			            if criterion.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}criterion':
-				       if 'is earlier than' in criterion.attrib['comment']:
-				          comment = criterion.attrib['comment'].split()
-				          print "   ", comment[0], "<", comment[-1]
-			     elif criteria3.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}criterion':
-				if 'is earlier than' in criteria3.attrib['comment']:
-				   comment = criteria3.attrib['comment'].split()
-				   print "   ", comment[0], "<", comment[-1]
-		      elif criteria2.tag == '{http://oval.mitre.org/XMLSchema/oval-definitions-5}criterion':
-			 if 'is earlier than' in criteria2.attrib['comment']:
-			    comment = criteria2.attrib['comment'].split()
-			    print "   ", comment[0], "<", comment[-1]
+	   	      recurse_criteria(criteria2)
 
 	   # Empty line to get a nice layout
 	   print ""
