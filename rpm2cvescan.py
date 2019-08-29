@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import rpm
 
 namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
 
@@ -72,12 +73,127 @@ class OrderedXMLTreeBuilder(ET.XMLTreeBuilder):
 
 # =======================================================================
 
+
+# =======================================================================
+# Class my_rpm
+#
+# Created to easily store rpm info and compare rpm versions
+# =======================================================================
+class my_rpm:
+    def __init__(self, name_string):
+        self.name = name_string.split('.')[0].rsplit('-',1)[0]
+	self.version_string = name_string.strip(self.name+'-')
+	if 'el' in self.version_string:
+	   self.rhversion = self.version_string.split('el')[1].split('.')[0]
+	else:
+	   self.rhversion = 7
+
+    def __eq__(self, other):
+        """Override the default Equals behavior"""
+        if isinstance(other, self.__class__):
+	   if self.name == other.name:
+	      result = rpm.labelCompare((self.epoch(), self.version(), self.release()), (other.epoch(), other.version(), other.release()))
+              if result == 0:
+	         return True
+              else:
+                 return False
+           else:
+              return False
+        else:
+           return False
+
+    def __ne__(self, other):
+        """Override the default Not Equal behavior"""
+        if isinstance(other, self.__class__):
+	   if self.name == other.name:
+	      result = rpm.labelCompare((self.epoch(), self.version(), self.release()), (other.epoch(), other.version(), other.release()))
+              if result == 0:
+	         return False
+              else:
+                 return True
+           else:
+              return True
+        else:
+           return True
+
+    def __ge__(self, other):
+        """Override the default Greater or equal behavior"""
+        if isinstance(other, self.__class__):
+	   if self.name == other.name:
+	      result = rpm.labelCompare((self.epoch(), self.version(), self.release()), (other.epoch(), other.version(), other.release()))
+              if result >= 0:
+	         return True
+              else:
+                 return False
+           else:
+              return False
+        else:
+           return False
+
+    def epoch(self):
+        if ':' in self.version_string:
+           return self.version_string.split(':')[0]
+        else:
+           return 0
+
+    def version(self):
+        if ':' in self.version_string:
+           ver_string = self.version_string.split(':')[1]
+        else:
+           ver_string = self.version_string
+        return ver_string.split('-')[0]
+
+    def release(self):
+        return ver_string.split('-')[1]
+
+# =======================================================================
+
+
+# =======================================================================
+# Class my_cve
+#
+# Created to easily store cve info
+# =======================================================================
+class my_cve:
+    def __init__(self, name, cvss, score):
+        self.name = name
+	self.cvss = int(cvss)
+	self.score = float(score)
+
+    #@classmethod
+    def rating(self):
+        if self.cvss == 3:
+	   if self.score > 8.9:
+	      severity = 'Critical'
+	   elif self.score > 6.9:
+	      severity = 'High'
+	   elif self.score > 3.9:
+	      severity = 'Medium'
+	   elif self.score > 0:
+	      severity = 'Low'
+	   else:
+	      severity = 'None'
+	elif self.cvss == 2:
+	   if self.score > 6.9:
+	      severity = 'High'
+	   elif self.score > 3.9:
+	      severity = 'Medium'
+	   else:
+	      severity = 'Low'
+	else:
+	   severity = 'Unknown'
+
+        return severity
+
+# =======================================================================
+
+
 # =======================================================================
 # Recursive criteria processing
 #
 # This is needed as RH CVE xml file is inconsistent with the amount
 # of levels it uses for patch criteria
-
+# =======================================================================
 def recurse_criteria(my_criterion):
     if my_criterion.tag == namespace+'criteria':
        for my_criteria in my_criterion:
@@ -85,7 +201,8 @@ def recurse_criteria(my_criterion):
     elif my_criterion.tag == namespace+'criterion':
        if 'is earlier than' in my_criterion.attrib['comment']:
           comment = my_criterion.attrib['comment'].split()
-	  print "   ", comment[0], "<", comment[-1]
+	  RPM = my_rpm(comment[0]+'-'+comment[-1])
+	  print "   ", RPM.name, "<", RPM.version_string, "(", RPM.rhversion, ")"
 
 # =======================================================================
 
@@ -115,8 +232,8 @@ for oval_subset in oval_definitions:
 			 #print ""
 			 #print metadata.__dict__
 			 #print ""
-			 if metadata_data.attrib['source'] == 'CVE':
-			    print "  CVE reference: ", metadata_data.attrib['ref_id']
+			 if metadata_data.attrib['source'] != 'CVE':
+			    print " ", metadata_data.attrib['ref_id']
 
 		  # get CVSS score of the CVE with this patch
 	          if metadata_data.tag == namespace+'advisory':
@@ -126,34 +243,22 @@ for oval_subset in oval_definitions:
 			    cve = advisory_data.attrib['href'].split('/')[-1]
 			    score_txt = advisory_data.attrib['cvss3'].split('/')[0]
 			    score = float(score_txt)
-			    severity = 'None'
 
-			    if score > 8.9:
-			       severity = 'Critical'
-			    elif score > 6.9:
-			       severity = 'High'
-			    elif score > 3.9:
-			       severity = 'Medium'
-			    elif score > 0:
-			       severity = 'Low'
-			       
-			    print " ", cve, "-" , score, "-", severity, "(cvss3)"
+			    CVE = my_cve(cve, 3, score)
+
+			    print " ", CVE.name, "-" , CVE.score, "-", CVE.rating(), "(cvss", CVE.cvss, ")"
 		         elif 'cvss2' in advisory_data.keys():
 			    cve = advisory_data.attrib['href'].split('/')[-1]
 			    score_txt = advisory_data.attrib['cvss2'].split('/')[0]
 			    score = float(score_txt)
-			    severity = 'Low'
 
-			    if score > 6.9:
-			       severity = 'High'
-			    elif score > 3.9:
-			       severity = 'Medium'
-			       
-			    print " ", cve, "-" , score, "-", severity, "(cvss2)"
+			    CVE = my_cve(cve, 2, score)
+
+			    print " ", CVE.name, "-" , CVE.score, "-", CVE.rating(), "(cvss", CVE.cvss, ")"
 
 	       # Weed trough criteria.
-	       # AT 1st level we alwais have criteria
-	       # at 2nd and later levels it is possible to find a criterion
+	       # At 1st level we always have criteria
+	       # At 2nd and later levels it is possible to find a criterion
 	       # with package name and version we need to store
 	       if patch_data.tag == namespace+'criteria':
 		  for criteria2 in patch_data:
