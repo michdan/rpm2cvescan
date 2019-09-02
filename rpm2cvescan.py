@@ -89,7 +89,7 @@ class my_rpm:
         else:
            self.name = name_string.split('.')[0].rsplit('-',1)[0]
 
-        self.version_string = name_string.strip(self.name+'-')
+        self.version_string = name_string[len(self.name)+1:]
 
         if 'el' in self.version_string:
            self.rhversion = self.version_string.split('el')[1].split('.')[0]
