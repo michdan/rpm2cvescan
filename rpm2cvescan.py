@@ -2,7 +2,7 @@
 import rpm
 
 namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
-patchlist = []
+patchlist = {}
 rhelversions = ['RHEL5', 'RHEL6', 'RHEL7', 'RHEL8' ]
 base_patchfilename='./com.redhat.rhsa-'
 
@@ -94,7 +94,7 @@ class my_rpm:
         if 'el' in self.version_string:
            self.rhversion = self.version_string.split('el')[1].split('.')[0]
         else:
-           self.rhversion = 7
+           self.rhversion = 0
 
     def __eq__(self, other):
         """Override the default Equals behavior"""
@@ -195,6 +195,19 @@ class my_cve:
               severity = 'Medium'
            else:
               severity = 'Low'
+        elif self.cvss == 1:
+           if self.score > 8.9:
+              severity = 'Critical'
+           elif self.score > 6.9:
+              severity = 'Important'
+           elif self.score > 3.9:
+              severity = 'Moderate'
+           elif self.score > 0:
+              severity = 'Low'
+           elif self.score == 0:
+              severity = 'None'
+           else:
+              severity = 'Unspecified'
         else:
            severity = 'Unknown'
 
@@ -244,7 +257,7 @@ def get_patchlist(my_rhelversion):
                #print oval_definition.tag, "-> ", oval_definition.__dict__
                patch_definition = oval_definition.attrib
 
-               this_patch = my_patch(patch_definition['id'], patch_definition['version'])
+               this_patch = my_patch(patch_definition['id'].split(':')[-1], patch_definition['version'])
 
                for patch_data in oval_definition:
                    #print patch_data.tag, "-> ", patch_data.__dict__
@@ -262,19 +275,36 @@ def get_patchlist(my_rhelversion):
                       if metadata_data.tag == namespace+'advisory':
                          for advisory_data in metadata_data:
                              # Assumption: CVSS3 score takes president over CVSS2
-                             if 'cvss3' in advisory_data.keys():
-                                cve = advisory_data.attrib['href'].split('/')[-1]
-                                score_txt = advisory_data.attrib['cvss3'].split('/')[0]
-                                score = float(score_txt)
+                             if advisory_data.tag == namespace+'cve':
+                                if 'cvss3' in advisory_data.keys():
+                                   cve = advisory_data.attrib['href'].split('/')[-1]
+                                   score_txt = advisory_data.attrib['cvss3'].split('/')[0]
+                                   score = float(score_txt)
 
-                                this_patch.cvelist.append(my_cve(cve, 3, score))
+                                   this_patch.cvelist.append(my_cve(cve, 3, score))
 
-                             elif 'cvss2' in advisory_data.keys():
-                                cve = advisory_data.attrib['href'].split('/')[-1]
-                                score_txt = advisory_data.attrib['cvss2'].split('/')[0]
-                                score = float(score_txt)
+                                elif 'cvss2' in advisory_data.keys():
+                                   cve = advisory_data.attrib['href'].split('/')[-1]
+                                   score_txt = advisory_data.attrib['cvss2'].split('/')[0]
+                                   score = float(score_txt)
 
-                                this_patch.cvelist.append(my_cve(cve, 2, score))
+                                   this_patch.cvelist.append(my_cve(cve, 2, score))
+                                else:
+                                   cve = advisory_data.attrib['href'].split('/')[-1]
+                                   if 'impact' in advisory_data.keys():
+                                      if advisory_data.attrib['impact'] == 'critical':
+                                         score = 9.9
+                                      elif advisory_data.attrib['impact'] == 'important':
+                                         score = 8.9
+                                      elif advisory_data.attrib['impact'] == 'moderate':
+                                         score = 6.9
+                                      elif advisory_data.attrib['impact'] == 'low':
+                                         score = 3.9
+                                      else:
+                                         score = 0.0
+                                   else:
+                                      score = -0.1
+                                   this_patch.cvelist.append(my_cve(cve, 1, score))
 
                    # Weed trough criteria.
                    # At 1st level we always have criteria
@@ -302,21 +332,31 @@ def print_patchlist(my_patchlist):
 
         for cve in patch.cvelist:
             print ' ', cve.name, \
-                  '-', cve.score, \
-                  '-', cve.rating(), \
-                  '(cvss{})'.format(cve.cvss)
+                  '-', cve.rating(),
+            if cve.cvss > 1:
+               print '-', cve.score, '(cvss{})'.format(cve.cvss)
+            else:
+               print ''
 
         for rpm in patch.rpmlist:
             print '   ', rpm.name, \
-                  '<', rpm.version_string, \
-                  '({})'.format(rpm.rhversion)
+                  '<', rpm.version_string,
+            if rpm.rhversion > 0:
+               print '({})'.format(rpm.rhversion)
+            else:
+               print ''
 
         print ''
 # =======================================================================
 
 for rhelversion in rhelversions:
-    patchlist = get_patchlist(rhelversion)
-    print_patchlist(patchlist)
+    patchlist[rhelversion] = get_patchlist(rhelversion)
+
+for rhelversion in rhelversions:
+    print '*****'
+    print rhelversion
+    print '*****'
+    print_patchlist(patchlist[rhelversion])
 
 # get rpm list via command:
 # rpm -qa --queryformat "%{NAME}-%{EPOCH}:%{VERSION}-%{RELEASE}\n" | sed 's/(none)/0/'
