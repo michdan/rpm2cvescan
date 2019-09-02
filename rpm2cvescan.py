@@ -1,15 +1,20 @@
 #!/usr/bin/python
 import rpm
+import subprocess
+import xml.etree.ElementTree as ET
 
 namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
 patchlist = {}
+rpmlist = []
 rhelversions = ['RHEL5', 'RHEL6', 'RHEL7', 'RHEL8' ]
 base_patchfilename='./com.redhat.rhsa-'
 
+rhel_version=subprocess.check_output('cat /etc/redhat-release',shell = True).split()[3]
+rhel_major=rhel_version.split('.')[0]
+
 # =======================================================================
 # Monkey patch ElementTree
-import xml.etree.ElementTree as ET
-
+#
 # Function to import xml in the order it's stored in the xml
 # instead of just random dump items in dict
 def _serialize_xml(write, elem, encoding, qnames, namespaces):
@@ -321,7 +326,8 @@ def get_patchlist(my_rhelversion):
 
 # =======================================================================
 
-# get_patchlist
+# =======================================================================
+# print_patchlist
 def print_patchlist(my_patchlist):
     
     for patch in my_patchlist:
@@ -348,15 +354,62 @@ def print_patchlist(my_patchlist):
 
         print ''
 # =======================================================================
+# get_system_rpmlist
+#
+# Get rpm list from system
+# =======================================================================
+def get_system_rpmlist():
 
-for rhelversion in rhelversions:
-    patchlist[rhelversion] = get_patchlist(rhelversion)
+    my_system_rpmlist = []
 
-for rhelversion in rhelversions:
-    print '*****'
-    print rhelversion
-    print '*****'
-    print_patchlist(patchlist[rhelversion])
+    cmd = ['/usr/bin/rpm \
+            -qa --queryformat "%{NAME}-%{EPOCH}:%{VERSION}-%{RELEASE}\\n"']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE,
+                              shell=True)
+
+    out, err = p.communicate()
+    p_status = p.wait()
+
+    lines = out.split('\n')
+
+    for line in lines:
+	if line.strip():
+           my_system_rpmlist.append(my_rpm(line.replace('(none)','0')))
+
+    return my_system_rpmlist
+
+# =======================================================================
+
+# =======================================================================
+# main
+# =======================================================================
+
+#for rhelversion in rhelversions:
+#    patchlist[rhelversion] = get_patchlist(rhelversion)
+
+rhelversion = 'RHEL'+rhel_major
+patchlist[rhelversion] = get_patchlist(rhelversion)
+
+#for rhelversion in rhelversions:
+#    print '*****'
+#    print rhelversion
+#    print '*****'
+#    print_patchlist(patchlist[rhelversion])
+print_patchlist(patchlist[rhelversion])
+
+rpmlist = get_system_rpmlist()
+
+print '*****'
+print 'system'
+print '*****'
+for rpm in rpmlist:
+    print '   ', rpm.name, \
+          '=', rpm.version_string,
+    if rpm.rhversion > 0:
+       print '({})'.format(rpm.rhversion)
+    else:
+       print ''
 
 # get rpm list via command:
 # rpm -qa --queryformat "%{NAME}-%{EPOCH}:%{VERSION}-%{RELEASE}\n" | sed 's/(none)/0/'
