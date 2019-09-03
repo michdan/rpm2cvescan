@@ -1,7 +1,23 @@
 #!/usr/bin/python
+import sys, getopt
 import rpm
 import subprocess
 import xml.etree.ElementTree as ET
+
+summary_only = False
+
+if len(sys.argv) > 1:
+   try:
+      opts, args = getopt.getopt(sys.argv[1:],"hs",["summary"])
+   except getopt.GetoptError:
+      print sys.argv[0], '[-h] [-s] [--summary]'
+      sys.exit(2)
+   for opt, arg in opts:
+      if opt == '-h':
+         print sys.argv[0], '[-h] [-s] [--summary]'
+         sys.exit()
+      elif opt in ("-s", "--summary"):
+         summary_only = True
 
 namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
 patchlist = {}
@@ -423,23 +439,27 @@ def print_patchstatus(my_patchstatus):
     summary['installed']['none'] = 0
     summary['installed']['total'] = 0
 
-    print 'RHAs that need to be installed on {}:'.format(hostname)
-    print ''
+    if not summary_only:
+       print 'RHAs that need to be installed on {}:'.format(hostname)
+       print ''
+
     for to_key in sorted(my_patchstatus['to_install']):
         # RHA ID
-        print my_patchstatus['to_install'][to_key]['patch'].rhalist[0]
+        if not summary_only:
+           print my_patchstatus['to_install'][to_key]['patch'].rhalist[0]
 
         highest_score = 0.0
         summary['to_install']['total'] += 1
 
         # Linked CVEs
         for cve in my_patchstatus['to_install'][to_key]['patch'].cvelist:
-            print ' ', cve.name, \
-                  '-', cve.rating(),
-            if cve.cvss > 1:
-               print '-', cve.score, '(cvss{})'.format(cve.cvss)
-            else:
-               print ''
+            if not summary_only:
+               print ' ', cve.name, \
+                     '-', cve.rating(),
+               if cve.cvss > 1:
+                  print '-', cve.score, '(cvss{})'.format(cve.cvss)
+               else:
+                  print ''
 
             if cve.score > highest_score:
                highest_score = cve.score
@@ -460,9 +480,10 @@ def print_patchstatus(my_patchstatus):
             for patch_rpm in sorted(my_patchstatus['to_install'][to_key]['patch'].rpmlist):
                 if patch_rpm.name == system_rpm.name:
                    if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
-                      print '   ', \
-                            system_rpm.name, system_rpm.version_string, \
-                            '<', patch_rpm.version_string
+                      if not summary_only:
+                         print '   ', \
+                               system_rpm.name, system_rpm.version_string, \
+                               '<', patch_rpm.version_string
 
         # Found patched rpms (if any are found)
         if my_patchstatus['to_install'][to_key]['patched_rpms']:
@@ -470,30 +491,35 @@ def print_patchstatus(my_patchstatus):
                for patch_rpm in sorted(my_patchstatus['to_install'][to_key]['patch'].rpmlist):
                    if patch_rpm.name == system_rpm.name:
                       if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
-                         print '   ', \
-                               system_rpm.name, system_rpm.version_string, \
-                               '=>', patch_rpm.version_string
+                         if not summary_only:
+                            print '   ', \
+                                  system_rpm.name, system_rpm.version_string, \
+                                  '=>', patch_rpm.version_string
 
 
-        print ''
+        if not summary_only:
+           print ''
 
-    print 'RHAs that are installed on {}:'.format(hostname)
-    print ''
+    if not summary_only:
+       print 'RHAs that are installed on {}:'.format(hostname)
+       print ''
     for inst_key in sorted(my_patchstatus['installed']):
         # RHA ID
-        print my_patchstatus['installed'][inst_key]['patch'].rhalist[0]
+        if not summary_only:
+           print my_patchstatus['installed'][inst_key]['patch'].rhalist[0]
 
         highest_score = 0.0
         summary['installed']['total'] += 1
 
         # Linked CVEs
         for cve in my_patchstatus['installed'][inst_key]['patch'].cvelist:
-            print ' ', cve.name, \
-                  '-', cve.rating(),
-            if cve.cvss > 1:
-               print '-', cve.score, '(cvss{})'.format(cve.cvss)
-            else:
-               print ''
+            if not summary_only:
+               print ' ', cve.name, \
+                     '-', cve.rating(),
+               if cve.cvss > 1:
+                  print '-', cve.score, '(cvss{})'.format(cve.cvss)
+               else:
+                  print ''
 
             if cve.score > highest_score:
                highest_score = cve.score
@@ -514,27 +540,33 @@ def print_patchstatus(my_patchstatus):
             for patch_rpm in sorted(my_patchstatus['installed'][inst_key]['patch'].rpmlist):
                 if patch_rpm.name == system_rpm.name:
                    if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
-                      print '   ', \
-                            system_rpm.name, system_rpm.version_string, \
-                            '=>', patch_rpm.version_string
+                      if not summary_only:
+                         print '   ', \
+                               system_rpm.name, system_rpm.version_string, \
+                               '=>', patch_rpm.version_string
 
-        print ''
+        if not summary_only:
+           print ''
 
-    print 'Not applicable RHAs for {}:'.format(hostname)
-    print ''
+    if not summary_only:
+       print 'Not applicable RHAs for {}:'.format(hostname)
+       print ''
     for na_key in sorted(my_patchstatus['na']):
         # RHA ID
-        print my_patchstatus['na'][na_key]['patch'].rhalist[0]
+        if not summary_only:
+           print my_patchstatus['na'][na_key]['patch'].rhalist[0]
 
         # Linked CVEs
         for cve in my_patchstatus['na'][na_key]['patch'].cvelist:
-            print ' ', cve.name, \
-                  '-', cve.rating(),
-            if cve.cvss > 1:
-               print '-', cve.score, '(cvss{})'.format(cve.cvss)
-            else:
-               print ''
-        print ''
+            if not summary_only:
+               print ' ', cve.name, \
+                     '-', cve.rating(),
+               if cve.cvss > 1:
+                  print '-', cve.score, '(cvss{})'.format(cve.cvss)
+               else:
+                  print ''
+        if not summary_only:
+           print ''
 
     print '           Tot Cri  Hi Med Low None'
     print '  Missing: %3d %3d %3d %3d %3d %3d' % \
@@ -600,39 +632,11 @@ def get_system_rpmlist():
 # main
 # =======================================================================
 
-# Old routine to print all patches
-#for rhelversion in rhelversions:
-#    patchlist[rhelversion] = get_patchlist(rhelversion)
-
-#for rhelversion in rhelversions:
-#    print '*****'
-#    print rhelversion
-#    print '*****'
-#    print_patchlist(patchlist[rhelversion])
-
-# Script runson system, so it needs only
-# to check the the RHAs for this major release
 rhelversion = 'RHEL'+rhel_major
 
 patchlist[rhelversion] = get_patchlist(rhelversion)
-# Print (extra check)
-#print_patchlist(patchlist[rhelversion])
 
 rpmlist = get_system_rpmlist()
 
-# Old routine to print all installed rpms
-
-#print '*****'
-#print 'system'
-#print '*****'
-#for rpm in rpmlist:
-#    print '   ', rpm.name, \
-#          '=', rpm.version_string,
-#    if rpm.rhversion > 0:
-#       print '({})'.format(rpm.rhversion)
-#    else:
-#       print ''
-
 patchstatus = check_patchlist(patchlist[rhelversion], rpmlist)
 print_patchstatus(patchstatus)
-
