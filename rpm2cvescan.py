@@ -157,7 +157,7 @@ class my_rpm:
         return ver_string.split('-')[0]
 
     def release(self):
-        return ver_string.split('-')[1]
+        return self.version_string.split('-')[1]
 
 # =======================================================================
 
@@ -354,6 +354,67 @@ def print_patchlist(my_patchlist):
 
         print ''
 # =======================================================================
+
+# =======================================================================
+# check_patchlist
+def check_patchlist(my_patchlist, my_system_rpmlist):
+    
+    my_patches = {}
+    my_patches[install] = {}
+    my_patches[installed] = {}
+    my_patches[na] = {}
+
+    for patch in my_patchlist:
+        print patch.name, patch.version
+
+        patched_rpms=0
+        unpatched_rpms=0
+
+        for patch_rpm in patch.rpmlist:
+            for system_rpm in my_system_rpmlist:
+                if patch_rpm.name == system_rpm.name:
+                   if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
+
+	              if system_rpm >= patch_rpm:
+                         print 'System rpm', system_rpm.name, \
+                               system_rpm.version_string, \
+                               '>=', \
+                               'patch rpm', patch_rpm.name, \
+                               patch_rpm.version_string
+		         patched_rpms += 1
+                      else:
+                         print 'System rpm', system_rpm.name, \
+                               system_rpm.version_string, \
+                               '<', \
+                               'patch rpm', patch_rpm.name, \
+                               patch_rpm.version_string
+		         unpatched_rpms += 1
+                   else:
+                      print 'System rpm', system_rpm.name, \
+                            system_rpm.version_string, \
+                            '><', \
+                            'patch rpm', patch_rpm.name, \
+                            patch_rpm.version_string
+
+        if unpatched_rpms > 0:
+           print patch.rhalist[0], 'needs to be installed'
+           for cve in patch.cvelist:
+               print ' ', cve.name, \
+                     '-', cve.rating(),
+               if cve.cvss > 1:
+                  print '-', cve.score, '(cvss{})'.format(cve.cvss)
+               else:
+                  print ''
+
+        elif patched_rpms > 0:
+           print patch.rhalist[0], 'is installed'
+
+        else:
+           print patch.rhalist[0], 'is not applicable'
+
+        print ''
+
+# =======================================================================
 # get_system_rpmlist
 #
 # Get rpm list from system
@@ -390,26 +451,25 @@ def get_system_rpmlist():
 
 rhelversion = 'RHEL'+rhel_major
 patchlist[rhelversion] = get_patchlist(rhelversion)
+#print_patchlist(patchlist[rhelversion])
 
 #for rhelversion in rhelversions:
 #    print '*****'
 #    print rhelversion
 #    print '*****'
 #    print_patchlist(patchlist[rhelversion])
-print_patchlist(patchlist[rhelversion])
 
 rpmlist = get_system_rpmlist()
 
-print '*****'
-print 'system'
-print '*****'
-for rpm in rpmlist:
-    print '   ', rpm.name, \
-          '=', rpm.version_string,
-    if rpm.rhversion > 0:
-       print '({})'.format(rpm.rhversion)
-    else:
-       print ''
+check_patchlist(patchlist[rhelversion], rpmlist)
 
-# get rpm list via command:
-# rpm -qa --queryformat "%{NAME}-%{EPOCH}:%{VERSION}-%{RELEASE}\n" | sed 's/(none)/0/'
+#print '*****'
+#print 'system'
+#print '*****'
+#for rpm in rpmlist:
+#    print '   ', rpm.name, \
+#          '=', rpm.version_string,
+#    if rpm.rhversion > 0:
+#       print '({})'.format(rpm.rhversion)
+#    else:
+#       print ''
