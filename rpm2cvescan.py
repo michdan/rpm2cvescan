@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import sys, getopt
+import sys, getopt, os.path
 import rpm
 import subprocess
 import xml.etree.ElementTree as ET
@@ -269,32 +269,29 @@ def recurse_criteria(my_criterion):
 def get_patchlist(my_rhelversion):
     
     my_filename = base_patchfilename+my_rhelversion+'.xml'
-    xml_tree = ET.parse(my_filename)
+    if os.path.exists(my_filename):
+       xml_tree = ET.parse(my_filename)
+    else:
+       print 'Can\'t access RHSA file', my_filename
+       sys.exit(1)
 
     my_patchlist = []
-    #print xml_tree
 
     oval_definitions = xml_tree.getroot()
     for oval_subset in oval_definitions:
-        #print (oval_subset.tag, "->", oval_subset.__dict__)
 
         if oval_subset.tag == namespace+'definitions':
            for oval_definition in oval_subset:
 
-               #print oval_definition.tag, "-> ", oval_definition.__dict__
                patch_definition = oval_definition.attrib
 
                this_patch = my_patch(patch_definition['id'].split(':')[-1], patch_definition['version'])
 
                for patch_data in oval_definition:
-                   #print patch_data.tag, "-> ", patch_data.__dict__
                    # Get CVE ID
                    if patch_data.tag == namespace+'metadata':
                       for metadata_data in patch_data:
                           if metadata_data.tag.endswith('reference'):
-                             #print ""
-                             #print metadata.__dict__
-                             #print ""
                              if metadata_data.attrib['source'] != 'CVE':
                                 this_patch.rhalist.append(metadata_data.attrib['ref_id'])
 
