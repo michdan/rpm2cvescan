@@ -136,10 +136,12 @@ RHSA-2014:0680
 
 [....]
 
+           Tot Cri  Hi Med Low None
+  Missing:  73   3  25  35  10   0
+Installed: 276   1  59 175  41   0
+
 ```
 TODO:
 
   * Add argument support to limit output to 1 of the 3 categories
-
-  * Add totals
 

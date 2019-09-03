@@ -406,11 +406,31 @@ def check_patchlist(my_patchlist, my_system_rpmlist):
 
 def print_patchstatus(my_patchstatus):
 
+    summary = {}
+    summary['to_install'] = {}
+    summary['to_install']['critical'] = 0
+    summary['to_install']['high'] = 0
+    summary['to_install']['medium'] = 0
+    summary['to_install']['low'] = 0
+    summary['to_install']['none'] = 0
+    summary['to_install']['total'] = 0
+
+    summary['installed'] = {}
+    summary['installed']['critical'] = 0
+    summary['installed']['high'] = 0
+    summary['installed']['medium'] = 0
+    summary['installed']['low'] = 0
+    summary['installed']['none'] = 0
+    summary['installed']['total'] = 0
+
     print 'RHAs that need to be installed on {}:'.format(hostname)
     print ''
     for to_key in sorted(my_patchstatus['to_install']):
         # RHA ID
         print my_patchstatus['to_install'][to_key]['patch'].rhalist[0]
+
+        highest_score = 0.0
+        summary['to_install']['total'] += 1
 
         # Linked CVEs
         for cve in my_patchstatus['to_install'][to_key]['patch'].cvelist:
@@ -420,6 +440,20 @@ def print_patchstatus(my_patchstatus):
                print '-', cve.score, '(cvss{})'.format(cve.cvss)
             else:
                print ''
+
+            if cve.score > highest_score:
+               highest_score = cve.score
+
+        if cve.score > 8.9:
+           summary['to_install']['critical'] += 1
+        elif cve.score > 6.9:
+           summary['to_install']['high'] += 1
+        elif cve.score > 3.9:
+           summary['to_install']['medium'] += 1
+        elif cve.score > 0:
+           summary['to_install']['low'] += 1
+        else:
+           summary['to_install']['none'] += 1
 
         # Found unpatched rpms
         for system_rpm in sorted(my_patchstatus['to_install'][to_key]['unpatched_rpms']):
@@ -449,6 +483,9 @@ def print_patchstatus(my_patchstatus):
         # RHA ID
         print my_patchstatus['installed'][inst_key]['patch'].rhalist[0]
 
+        highest_score = 0.0
+        summary['installed']['total'] += 1
+
         # Linked CVEs
         for cve in my_patchstatus['installed'][inst_key]['patch'].cvelist:
             print ' ', cve.name, \
@@ -457,6 +494,20 @@ def print_patchstatus(my_patchstatus):
                print '-', cve.score, '(cvss{})'.format(cve.cvss)
             else:
                print ''
+
+            if cve.score > highest_score:
+               highest_score = cve.score
+
+        if cve.score > 8.9:
+           summary['installed']['critical'] += 1
+        elif cve.score > 6.9:
+           summary['installed']['high'] += 1
+        elif cve.score > 3.9:
+           summary['installed']['medium'] += 1
+        elif cve.score > 0:
+           summary['installed']['low'] += 1
+        else:
+           summary['installed']['none'] += 1
 
         # Found patched rpms
         for system_rpm in sorted(my_patchstatus['installed'][inst_key]['patched_rpms']):
@@ -484,6 +535,23 @@ def print_patchstatus(my_patchstatus):
             else:
                print ''
         print ''
+
+    print '           Tot Cri  Hi Med Low None'
+    print '  Missing: %3d %3d %3d %3d %3d %3d' % \
+                    ( summary['to_install']['total'], \
+                        summary['to_install']['critical'], \
+                        summary['to_install']['high'], \
+                        summary['to_install']['medium'], \
+                        summary['to_install']['low'], \
+                        summary['to_install']['none'] )
+    print 'Installed: %3d %3d %3d %3d %3d %3d' % \
+                    ( summary['installed']['total'], \
+                      summary['installed']['critical'], \
+                      summary['installed']['high'], \
+                      summary['installed']['medium'], \
+                      summary['installed']['low'], \
+                      summary['installed']['none'] )
+
 # =======================================================================
 
 
