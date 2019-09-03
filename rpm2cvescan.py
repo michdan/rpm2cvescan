@@ -5,12 +5,15 @@ import xml.etree.ElementTree as ET
 
 namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
 patchlist = {}
+patchstatus = {}
 rpmlist = []
 rhelversions = ['RHEL5', 'RHEL6', 'RHEL7', 'RHEL8' ]
 base_patchfilename='./com.redhat.rhsa-'
 
 rhel_version=subprocess.check_output('cat /etc/redhat-release',shell = True).split()[3]
 rhel_major=rhel_version.split('.')[0]
+
+hostname=subprocess.check_output('hostname',shell = True).strip()
 
 # =======================================================================
 # Monkey patch ElementTree
@@ -157,7 +160,10 @@ class my_rpm:
         return ver_string.split('-')[0]
 
     def release(self):
-        return self.version_string.split('-')[1]
+	if 'centos' in self.version_string:
+           return self.version_string.split('-')[1].split('.centos')[0]
+        else:
+           return self.version_string.split('-')[1]
 
 # =======================================================================
 
@@ -360,12 +366,19 @@ def print_patchlist(my_patchlist):
 def check_patchlist(my_patchlist, my_system_rpmlist):
     
     my_patches = {}
-    my_patches[install] = {}
-    my_patches[installed] = {}
-    my_patches[na] = {}
+    my_patches['to_install'] = {}
+    my_patches['installed'] = {}
+    my_patches['na'] = {}
 
     for patch in my_patchlist:
-        print patch.name, patch.version
+        #print patch.name, patch.version
+        rha = float(patch.name+'.'+str(patch.version))
+
+        my_patch = {}
+        my_patch['patch'] = patch
+        my_patch['patched_rpms'] = []
+        my_patch['unpatched_rpms'] = []
+        my_patch['na_rpms'] = []
 
         patched_rpms=0
         unpatched_rpms=0
@@ -376,43 +389,103 @@ def check_patchlist(my_patchlist, my_system_rpmlist):
                    if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
 
 	              if system_rpm >= patch_rpm:
-                         print 'System rpm', system_rpm.name, \
-                               system_rpm.version_string, \
-                               '>=', \
-                               'patch rpm', patch_rpm.name, \
-                               patch_rpm.version_string
-		         patched_rpms += 1
+                         my_patch['patched_rpms'].append(system_rpm)
                       else:
-                         print 'System rpm', system_rpm.name, \
-                               system_rpm.version_string, \
-                               '<', \
-                               'patch rpm', patch_rpm.name, \
-                               patch_rpm.version_string
-		         unpatched_rpms += 1
+                         my_patch['unpatched_rpms'].append(system_rpm)
                    else:
-                      print 'System rpm', system_rpm.name, \
-                            system_rpm.version_string, \
-                            '><', \
-                            'patch rpm', patch_rpm.name, \
-                            patch_rpm.version_string
+                      my_patch['na_rpms'].append(system_rpm)
 
-        if unpatched_rpms > 0:
-           print patch.rhalist[0], 'needs to be installed'
-           for cve in patch.cvelist:
-               print ' ', cve.name, \
-                     '-', cve.rating(),
-               if cve.cvss > 1:
-                  print '-', cve.score, '(cvss{})'.format(cve.cvss)
-               else:
-                  print ''
-
-        elif patched_rpms > 0:
-           print patch.rhalist[0], 'is installed'
-
+        if my_patch['unpatched_rpms']:
+           my_patches['to_install'][rha] = my_patch
+        elif my_patch['patched_rpms']:
+           my_patches['installed'][rha] = my_patch
         else:
-           print patch.rhalist[0], 'is not applicable'
+           my_patches['na'][rha] = my_patch
+
+    return my_patches
+
+def print_patchstatus(my_patchstatus):
+
+    print 'RHAs that need to be installed on {}:'.format(hostname)
+    print ''
+    for to_key in sorted(my_patchstatus['to_install']):
+        # RHA ID
+        print my_patchstatus['to_install'][to_key]['patch'].rhalist[0]
+
+        # Linked CVEs
+        for cve in my_patchstatus['to_install'][to_key]['patch'].cvelist:
+            print ' ', cve.name, \
+                  '-', cve.rating(),
+            if cve.cvss > 1:
+               print '-', cve.score, '(cvss{})'.format(cve.cvss)
+            else:
+               print ''
+
+        # Found unpatched rpms
+        for system_rpm in sorted(my_patchstatus['to_install'][to_key]['unpatched_rpms']):
+            for patch_rpm in sorted(my_patchstatus['to_install'][to_key]['patch'].rpmlist):
+                if patch_rpm.name == system_rpm.name:
+                   if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
+                      print '   ', \
+                            system_rpm.name, system_rpm.version_string, \
+                            '<', patch_rpm.version_string
+
+        # Found patched rpms (if any are found)
+        if my_patchstatus['to_install'][to_key]['patched_rpms']:
+           for system_rpm in sorted(my_patchstatus['to_install'][to_key]['patched_rpms']):
+               for patch_rpm in sorted(my_patchstatus['to_install'][to_key]['patch'].rpmlist):
+                   if patch_rpm.name == system_rpm.name:
+                      if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
+                         print '   ', \
+                               system_rpm.name, system_rpm.version_string, \
+                               '=>', patch_rpm.version_string
+
 
         print ''
+
+    print 'RHAs that are installed on {}:'.format(hostname)
+    print ''
+    for inst_key in sorted(my_patchstatus['installed']):
+        # RHA ID
+        print my_patchstatus['installed'][inst_key]['patch'].rhalist[0]
+
+        # Linked CVEs
+        for cve in my_patchstatus['installed'][inst_key]['patch'].cvelist:
+            print ' ', cve.name, \
+                  '-', cve.rating(),
+            if cve.cvss > 1:
+               print '-', cve.score, '(cvss{})'.format(cve.cvss)
+            else:
+               print ''
+
+        # Found patched rpms
+        for system_rpm in sorted(my_patchstatus['installed'][inst_key]['patched_rpms']):
+            for patch_rpm in sorted(my_patchstatus['installed'][inst_key]['patch'].rpmlist):
+                if patch_rpm.name == system_rpm.name:
+                   if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
+                      print '   ', \
+                            system_rpm.name, system_rpm.version_string, \
+                            '=>', patch_rpm.version_string
+
+        print ''
+
+    print 'Not applicable RHAs for {}:'.format(hostname)
+    print ''
+    for na_key in sorted(my_patchstatus['na']):
+        # RHA ID
+        print my_patchstatus['na'][na_key]['patch'].rhalist[0]
+
+        # Linked CVEs
+        for cve in my_patchstatus['na'][na_key]['patch'].cvelist:
+            print ' ', cve.name, \
+                  '-', cve.rating(),
+            if cve.cvss > 1:
+               print '-', cve.score, '(cvss{})'.format(cve.cvss)
+            else:
+               print ''
+        print ''
+# =======================================================================
+
 
 # =======================================================================
 # get_system_rpmlist
@@ -439,19 +512,16 @@ def get_system_rpmlist():
            my_system_rpmlist.append(my_rpm(line.replace('(none)','0')))
 
     return my_system_rpmlist
-
 # =======================================================================
+
 
 # =======================================================================
 # main
 # =======================================================================
 
+# Old routine to print all patches
 #for rhelversion in rhelversions:
 #    patchlist[rhelversion] = get_patchlist(rhelversion)
-
-rhelversion = 'RHEL'+rhel_major
-patchlist[rhelversion] = get_patchlist(rhelversion)
-#print_patchlist(patchlist[rhelversion])
 
 #for rhelversion in rhelversions:
 #    print '*****'
@@ -459,9 +529,17 @@ patchlist[rhelversion] = get_patchlist(rhelversion)
 #    print '*****'
 #    print_patchlist(patchlist[rhelversion])
 
+# Script runson system, so it needs only
+# to check the the RHAs for this major release
+rhelversion = 'RHEL'+rhel_major
+
+patchlist[rhelversion] = get_patchlist(rhelversion)
+# Print (extra check)
+#print_patchlist(patchlist[rhelversion])
+
 rpmlist = get_system_rpmlist()
 
-check_patchlist(patchlist[rhelversion], rpmlist)
+# Old routine to print all installed rpms
 
 #print '*****'
 #print 'system'
@@ -473,3 +551,7 @@ check_patchlist(patchlist[rhelversion], rpmlist)
 #       print '({})'.format(rpm.rhversion)
 #    else:
 #       print ''
+
+patchstatus = check_patchlist(patchlist[rhelversion], rpmlist)
+print_patchstatus(patchstatus)
+
