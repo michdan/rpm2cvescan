@@ -509,7 +509,20 @@ def get_system_rpmlist():
 
     for line in lines:
 	if line.strip():
-           my_system_rpmlist.append(my_rpm(line.replace('(none)','0')))
+
+           rpm_string = line.replace('(none)','0')
+
+	   if ':' in line:
+              rpm_name = line.split(':')[0].rsplit('-',1)[0]
+           else:
+              rpm_name = line.split('.')[0].rsplit('-',1)[0]
+
+           if rpm_name != 'kernel':
+              my_system_rpmlist.append(my_rpm(rpm_string))
+           else:
+              rpm_release = rpm_string.split('-')[-1]
+              if len(rpm_release) != 6 and rpm_release[4:6] != 'el':
+                 my_system_rpmlist.append(my_rpm(rpm_string))
 
     return my_system_rpmlist
 # =======================================================================
