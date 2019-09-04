@@ -4,20 +4,85 @@ import rpm
 import subprocess
 import xml.etree.ElementTree as ET
 
-summary_only = False
+def usage():
+    print 'Usage:', os.path.basename(sys.argv[0]), '[OPTION...]'
+    print ''
+    print 'This tool prints all info of RedHat Advisories (RHA) that'
+    print 'is published in relation to the system the command is run on.'
+    print ''
+    print 'Default it will report:'
+    print ''
+    print ' * Missing or incomplete RHAs with:'
+    print '   * CVE reports with rating and score'
+    print '   * rpm with found version and version needed to patch'
+    print ' * Installed RHAs with:'
+    print '   * CVE reports with rating and score'
+    print '   * rpm with found version and version needed to patch'
+    print ' * Non applicable RHAs with:'
+    print '   * CVE reports with rating and score'
+    print ' * Summary of results:'
+    print '   (Total and amount of critical, high, med, low, none CVEs)'
+    print '   * Missing RHAs'
+    print '   * Installed RHAs'
+    print ''
+    print 'Options to limit output:'
+    print '  -h, --help         Show this help message and exit.'
+    print '  -i, --installed    Only list installed RHAs.'
+    print '  -m, --missing      Only list missing RHAs.'
+    print '  -s, --summary      Display summary.'
+    print ''
+    print 'The installed and missing options are mutual exclusive.'
+    print ''
+    print 'When adding the summary option with installed or missing,'
+    print 'the summary reported will be limited to the group selected.'
+    print 'When summary is the only option used, it will display the'
+    print 'summary of missing and installed RHAs.'
+
+print_missing = True
+print_installed = True
+print_na = True
+print_summary = True
+print_summary_only = False
+
+installed_arg = False
+missing_arg = False
+summary_arg = False
 
 if len(sys.argv) > 1:
    try:
-      opts, args = getopt.getopt(sys.argv[1:],"hs",["summary"])
+      opts, args = getopt.gnu_getopt(sys.argv[1:],"hims",["help",
+                                                          "installed",
+                                                          "missing",
+                                                          "summary"])
    except getopt.GetoptError:
-      print sys.argv[0], '[-h] [-s] [--summary]'
+      usage()
       sys.exit(2)
    for opt, arg in opts:
-      if opt == '-h':
-         print sys.argv[0], '[-h] [-s] [--summary]'
+      if opt in ("-h", "--help"):
+         usage()
          sys.exit()
+      elif opt in ("-i", "--installed"):
+         installed_arg = True
+      elif opt in ("-m", "--missing"):
+         missing_arg = True
       elif opt in ("-s", "--summary"):
-         summary_only = True
+         summary_arg = True
+
+if installed_arg and missing_arg:
+   print 'Options installed and missing are mutual exclusive.'
+   print 'Pick one.'
+   sys.exit(2)
+elif installed_arg and summary_arg:
+   print_missing = False
+   print_na = False
+elif missing_arg and summary_arg:
+   print_installed = False
+   print_na = False
+elif summary_arg:
+   print_installed = False
+   print_missing = False
+   print_na = False
+   print_summary_only = True
 
 namespace='{http://oval.mitre.org/XMLSchema/oval-definitions-5}'
 patchlist = {}
@@ -379,7 +444,7 @@ def print_patchlist(my_patchlist):
 def check_patchlist(my_patchlist, my_system_rpmlist):
     
     my_patches = {}
-    my_patches['to_install'] = {}
+    my_patches['missing'] = {}
     my_patches['installed'] = {}
     my_patches['na'] = {}
 
@@ -409,7 +474,7 @@ def check_patchlist(my_patchlist, my_system_rpmlist):
                       my_patch['na_rpms'].append(system_rpm)
 
         if my_patch['unpatched_rpms']:
-           my_patches['to_install'][rha] = my_patch
+           my_patches['missing'][rha] = my_patch
         elif my_patch['patched_rpms']:
            my_patches['installed'][rha] = my_patch
         else:
@@ -420,13 +485,13 @@ def check_patchlist(my_patchlist, my_system_rpmlist):
 def print_patchstatus(my_patchstatus):
 
     summary = {}
-    summary['to_install'] = {}
-    summary['to_install']['critical'] = 0
-    summary['to_install']['high'] = 0
-    summary['to_install']['medium'] = 0
-    summary['to_install']['low'] = 0
-    summary['to_install']['none'] = 0
-    summary['to_install']['total'] = 0
+    summary['missing'] = {}
+    summary['missing']['critical'] = 0
+    summary['missing']['high'] = 0
+    summary['missing']['medium'] = 0
+    summary['missing']['low'] = 0
+    summary['missing']['none'] = 0
+    summary['missing']['total'] = 0
 
     summary['installed'] = {}
     summary['installed']['critical'] = 0
@@ -436,21 +501,21 @@ def print_patchstatus(my_patchstatus):
     summary['installed']['none'] = 0
     summary['installed']['total'] = 0
 
-    if not summary_only:
+    if print_installed:
        print 'RHAs that need to be installed on {}:'.format(hostname)
        print ''
 
-    for to_key in sorted(my_patchstatus['to_install']):
+    for to_key in sorted(my_patchstatus['missing']):
         # RHA ID
-        if not summary_only:
-           print my_patchstatus['to_install'][to_key]['patch'].rhalist[0]
+        if print_missing:
+           print my_patchstatus['missing'][to_key]['patch'].rhalist[0]
 
         highest_score = 0.0
-        summary['to_install']['total'] += 1
+        summary['missing']['total'] += 1
 
         # Linked CVEs
-        for cve in my_patchstatus['to_install'][to_key]['patch'].cvelist:
-            if not summary_only:
+        for cve in my_patchstatus['missing'][to_key]['patch'].cvelist:
+            if print_missing:
                print ' ', cve.name, \
                      '-', cve.rating(),
                if cve.cvss > 1:
@@ -462,47 +527,47 @@ def print_patchstatus(my_patchstatus):
                highest_score = cve.score
 
         if cve.score > 8.9:
-           summary['to_install']['critical'] += 1
+           summary['missing']['critical'] += 1
         elif cve.score > 6.9:
-           summary['to_install']['high'] += 1
+           summary['missing']['high'] += 1
         elif cve.score > 3.9:
-           summary['to_install']['medium'] += 1
+           summary['missing']['medium'] += 1
         elif cve.score > 0:
-           summary['to_install']['low'] += 1
+           summary['missing']['low'] += 1
         else:
-           summary['to_install']['none'] += 1
+           summary['missing']['none'] += 1
 
         # Found unpatched rpms
-        for system_rpm in sorted(my_patchstatus['to_install'][to_key]['unpatched_rpms']):
-            for patch_rpm in sorted(my_patchstatus['to_install'][to_key]['patch'].rpmlist):
+        for system_rpm in sorted(my_patchstatus['missing'][to_key]['unpatched_rpms']):
+            for patch_rpm in sorted(my_patchstatus['missing'][to_key]['patch'].rpmlist):
                 if patch_rpm.name == system_rpm.name:
                    if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
-                      if not summary_only:
+                      if print_missing:
                          print '   ', \
                                system_rpm.name, system_rpm.version_string, \
                                '<', patch_rpm.version_string
 
         # Found patched rpms (if any are found)
-        if my_patchstatus['to_install'][to_key]['patched_rpms']:
-           for system_rpm in sorted(my_patchstatus['to_install'][to_key]['patched_rpms']):
-               for patch_rpm in sorted(my_patchstatus['to_install'][to_key]['patch'].rpmlist):
+        if my_patchstatus['missing'][to_key]['patched_rpms']:
+           for system_rpm in sorted(my_patchstatus['missing'][to_key]['patched_rpms']):
+               for patch_rpm in sorted(my_patchstatus['missing'][to_key]['patch'].rpmlist):
                    if patch_rpm.name == system_rpm.name:
                       if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
-                         if not summary_only:
+                         if print_missing:
                             print '   ', \
                                   system_rpm.name, system_rpm.version_string, \
                                   '=>', patch_rpm.version_string
 
 
-        if not summary_only:
+        if print_missing:
            print ''
 
-    if not summary_only:
+    if print_missing:
        print 'RHAs that are installed on {}:'.format(hostname)
        print ''
     for inst_key in sorted(my_patchstatus['installed']):
         # RHA ID
-        if not summary_only:
+        if print_installed:
            print my_patchstatus['installed'][inst_key]['patch'].rhalist[0]
 
         highest_score = 0.0
@@ -510,7 +575,7 @@ def print_patchstatus(my_patchstatus):
 
         # Linked CVEs
         for cve in my_patchstatus['installed'][inst_key]['patch'].cvelist:
-            if not summary_only:
+            if print_installed:
                print ' ', cve.name, \
                      '-', cve.rating(),
                if cve.cvss > 1:
@@ -537,49 +602,53 @@ def print_patchstatus(my_patchstatus):
             for patch_rpm in sorted(my_patchstatus['installed'][inst_key]['patch'].rpmlist):
                 if patch_rpm.name == system_rpm.name:
                    if patch_rpm.rhversion[0] == system_rpm.rhversion[0]:
-                      if not summary_only:
+                      if print_installed:
                          print '   ', \
                                system_rpm.name, system_rpm.version_string, \
                                '=>', patch_rpm.version_string
 
-        if not summary_only:
+        if print_installed:
            print ''
 
-    if not summary_only:
+    ### Print non applicable RHAs
+    if print_na:
        print 'Not applicable RHAs for {}:'.format(hostname)
        print ''
     for na_key in sorted(my_patchstatus['na']):
         # RHA ID
-        if not summary_only:
+        if print_na:
            print my_patchstatus['na'][na_key]['patch'].rhalist[0]
 
         # Linked CVEs
         for cve in my_patchstatus['na'][na_key]['patch'].cvelist:
-            if not summary_only:
+            if print_na:
                print ' ', cve.name, \
                      '-', cve.rating(),
                if cve.cvss > 1:
                   print '-', cve.score, '(cvss{})'.format(cve.cvss)
                else:
                   print ''
-        if not summary_only:
+        if print_na:
            print ''
 
-    print '           Tot Cri  Hi Med Low None'
-    print '  Missing: %3d %3d %3d %3d %3d %3d' % \
-                    ( summary['to_install']['total'], \
-                        summary['to_install']['critical'], \
-                        summary['to_install']['high'], \
-                        summary['to_install']['medium'], \
-                        summary['to_install']['low'], \
-                        summary['to_install']['none'] )
-    print 'Installed: %3d %3d %3d %3d %3d %3d' % \
-                    ( summary['installed']['total'], \
-                      summary['installed']['critical'], \
-                      summary['installed']['high'], \
-                      summary['installed']['medium'], \
-                      summary['installed']['low'], \
-                      summary['installed']['none'] )
+    if print_summary:
+       print '           Tot Cri  Hi Med Low None'
+       if print_missing or print_summary_only:
+          print '  Missing: %3d %3d %3d %3d %3d %3d' % \
+                          ( summary['missing']['total'], \
+                            summary['missing']['critical'], \
+                            summary['missing']['high'], \
+                            summary['missing']['medium'], \
+                            summary['missing']['low'], \
+                            summary['missing']['none'] )
+       if print_installed or print_summary_only:
+          print 'Installed: %3d %3d %3d %3d %3d %3d' % \
+                          ( summary['installed']['total'], \
+                            summary['installed']['critical'], \
+                            summary['installed']['high'], \
+                            summary['installed']['medium'], \
+                            summary['installed']['low'], \
+                            summary['installed']['none'] )
 
 # =======================================================================
 
@@ -609,10 +678,10 @@ def get_system_rpmlist():
 
            rpm_string = line.replace('(none)','0')
 
-	   if ':' in line:
-              rpm_name = line.split(':')[0].rsplit('-',1)[0]
+	   if ':' in rpm_string:
+              rpm_name = rpm_string.split(':')[0].rsplit('-',1)[0]
            else:
-              rpm_name = line.split('.')[0].rsplit('-',1)[0]
+              rpm_name = rpm_string.split('.')[0].rsplit('-',1)[0]
 
            if rpm_name != 'kernel':
               my_system_rpmlist.append(my_rpm(rpm_string))
