@@ -687,7 +687,12 @@ def get_system_rpmlist():
               my_system_rpmlist.append(my_rpm(rpm_string))
            else:
               rpm_release = rpm_string.split('-')[-1]
-              if len(rpm_release) != 6 and rpm_release[4:6] != 'el':
+              # get 2nd field of kernel release.
+              # It's either el? (centos specific package) or numeric
+              # We need to skip the centos package
+              rpm_release_second_field = rpm_release.split('.')[1]
+              if not (len (rpm_release_second_field) >= 2 and
+                      rpm_release_second_field[0:2] == 'el'):
                  my_system_rpmlist.append(my_rpm(rpm_string))
 
     return my_system_rpmlist
