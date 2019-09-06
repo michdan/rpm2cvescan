@@ -1,26 +1,48 @@
-rpm2cvescan
-==============
+# rpm2cvescan
 
-# Original repo
-- [bigHosting/rpm2cvescan](https://github.com/bigHosting/rpm2cvescan)
+#### Table of Contents
 
+1. [Original repo](#original-repo)
+2. [Why](#why)
+3. [General info](#general-info)
+4. [How does this work](#how-does-this-work)
+5. [How to run the scanner](#how-to-run-this-scanner)
+6. [Command line options](command-line-options)
+    * [Installed](installed)
+    * [Missing](missing)
+    * [Summary](summary)
+7. [Output example](ouput-example)
+8. [End](#end)
+
+## Original repo
+
+[bigHosting/rpm2cvescan](https://github.com/bigHosting/rpm2cvescan)
+
+## Why
 
 This python version is a rewrite of the original Perl version, as it needed
 an extra C program to use the Python rpmvercmp function. It was more logical
 to have the complete tool in Python.
 
+This tool will only report information about packages used by RedHat. If custom rpms are used,
+e.g. php 7.1 or httpd 2.4 , this tool is not capabale of detecting vulnerabilities simply
+because com.redhat.rhsa-RHEL7.xml has info on what's installed by default on your distro version,
+e.g. php 5.3 for EL6.
+
+## General info
+
 As the tool needs to run on CentOS 6 and 7 systems (in my setup) it's written
 and tested for python 2.7.5.
 
+rpm2cvescan is a RedHat/CentOS 5/6/7/8 rpm cve vulnerability scanner based on
+  * RedHat's OVAL info for RHEL5,6,7,8:
+    * [com.redhat.rhsa-RHEL5.xml](https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL5.xml)
+    * [com.redhat.rhsa-RHEL6.xml](https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL5.xml)
+    * [com.redhat.rhsa-RHEL7.xml](https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL7.xml)
+    * [com.redhat.rhsa-RHEL8.xml](https://www.redhat.com/security/data/oval/com.redhat.rhsa-RHEL8.xml)
 
-rpm2cvescan is an RedHat/CentOS 5/6/7/8 rpm cve vulnerability scanner based on
-  * RedHat's OVAL infor for RHEL5,6,7,8:
-    * com.redhat.rhsa-RHEL5.xml
-    * com.redhat.rhsa-RHEL6.xml
-    * com.redhat.rhsa-RHEL7.xml
-    * com.redhat.rhsa-RHEL8.xml
+## How does this work
 
-How does this work?
   Based on the collected rpms, the rhel major release of the system it's run on
   and the corresponding rhsa file, a data structure is created to store all
   patches with the data that is used (RHA ID, CVEs, rpms + version)
@@ -45,22 +67,53 @@ How does this work?
   * No rpms were found that the patch applies to
     -> added to the 'na' patch list.
 
-How to run the scanner:
-  * download these files to be sure you have the latest revision:
+## How to run the scanner
+  * download RedHat all oval files to be sure you have the latest revision:
+```
        # ./download.sh
+```
 
   * run the python program:
-       # ./rpm2cvescan.py
-
-
-This tool will only report information about packages used by RedHat. If custom rpms are used,
-e.g. php 7.1 or httpd 2.4 , this tool is not capabale of detecting vulnerabilities simply
-because com.redhat.rhsa-RHEL7.xml has info on what's installed by default on your distro version,
-e.g. php 5.3 for EL6.
-
 ```
-Output example:
+       # ./rpm2cvescan.py
+```
 
+## Command line options
+
+To limit the output of the tool, several commandline options have been
+implemented to only display:
+
+  * Installed RHAs (-i, --installed)
+  * Missing or incomplete RHAs (-m, --missing)
+  * Summary of results (-s, --summary)
+
+### Installed
+
+With this option, the tool will only display detailed output for all
+RHAs correctly installed on the system.
+
+This option can be combined with the summary option, which then will
+display the summary of the installed RHAs at the bottom of the output.
+
+### Missing
+
+With this option, the tool will only display detailed output for all
+RHAs not or incompletely installed on the system.
+
+This option can be combined with the summary option, which then will
+display the summary of the missing RHAs at the bottom of the output.
+
+### Summary
+
+This option just displays the summary. This option can be used for
+monitoring purposes.
+
+When combined with installed or missing, the summary of just the
+specified caregory will be shown at the bottom of the detailed output
+of that command.
+
+## Output example
+```
 RHAs that need to be installed on system:
 
 RHSA-2017:0372
@@ -141,7 +194,7 @@ RHSA-2014:0680
 Installed: 276   1  59 175  41   0
 
 ```
-TODO:
 
-  * Add argument support to limit output to 1 of the 3 categories
+## End
 
+That's all folks
