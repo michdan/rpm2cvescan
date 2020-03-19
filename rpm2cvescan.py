@@ -183,7 +183,7 @@ class my_rpm:
         if 'el' in self.version_string:
            self.rhversion = self.version_string.split('el')[1].split('.')[0]
         else:
-           self.rhversion = 0
+           self.rhversion = '0'
 
     def __eq__(self, other):
         """Override the default Equals behavior"""
